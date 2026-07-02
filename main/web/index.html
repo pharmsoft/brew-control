@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>BrewControl</title>
+<style>
+  :root{
+    --bg:#0f1720; --panel:#18232f; --line:#2a3a49; --txt:#e8eef4; --muted:#8aa0b4;
+    --accent:#ff8c42; --plan:#4aa3ff; --hot:#ff5252; --ok:#3ecf8e;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);
+       font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+  header{padding:14px 18px;background:var(--panel);border-bottom:1px solid var(--line);
+         display:flex;align-items:center;gap:12px}
+  header h1{font-size:18px;margin:0;font-weight:600}
+  header .badge{font-size:12px;color:var(--muted)}
+  .wrap{max-width:920px;margin:0 auto;padding:16px}
+  .grid{display:grid;grid-template-columns:1fr;gap:16px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+  .stats{display:flex;flex-wrap:wrap;gap:20px;align-items:baseline}
+  .stat .v{font-size:34px;font-weight:700;line-height:1}
+  .stat .l{font-size:12px;color:var(--muted);margin-top:4px}
+  .stat .v.small{font-size:20px}
+  .dot{display:inline-block;width:12px;height:12px;border-radius:50%;background:#455;
+       margin-right:6px;vertical-align:middle}
+  .dot.on{background:var(--hot);box-shadow:0 0 8px var(--hot)}
+  canvas{width:100%;height:320px;display:block;background:#0b131b;border-radius:8px}
+  table{width:100%;border-collapse:collapse;margin-top:6px}
+  th,td{padding:6px 8px;text-align:left;font-size:14px}
+  th{color:var(--muted);font-weight:500;border-bottom:1px solid var(--line)}
+  td input{width:90px;background:#0b131b;border:1px solid var(--line);color:var(--txt);
+           border-radius:6px;padding:6px 8px;font-size:14px}
+  input[type=text]{background:#0b131b;border:1px solid var(--line);color:var(--txt);
+           border-radius:6px;padding:8px 10px;font-size:14px;min-width:160px}
+  button{cursor:pointer;border:none;border-radius:8px;padding:9px 16px;font-size:14px;
+         font-weight:600;color:#fff;background:#33475a}
+  button.primary{background:var(--ok)} button.stop{background:var(--hot)}
+  button.ghost{background:transparent;border:1px solid var(--line);color:var(--muted);
+               font-weight:500;padding:6px 12px}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px}
+  .spacer{flex:1}
+  select{background:#0b131b;border:1px solid var(--line);color:var(--txt);
+         border-radius:6px;padding:8px;font-size:14px}
+  .hint{color:var(--muted);font-size:12px;margin-top:8px}
+  .state-idle{color:var(--muted)} .state-running{color:var(--ok)} .state-done{color:var(--plan)}
+</style>
+</head>
+<body>
+<header>
+  <h1>🍺 BrewControl</h1>
+  <span class="badge" id="badge">прототип · симуляция температуры</span>
+</header>
+
+<div class="wrap grid">
+
+  <div class="card">
+    <div class="stats">
+      <div class="stat"><div class="v" id="temp">--</div><div class="l">текущая, °C</div></div>
+      <div class="stat"><div class="v small" id="target">--</div><div class="l">уставка, °C</div></div>
+      <div class="stat"><div class="v small"><span class="dot" id="heaterDot"></span><span id="heater">выкл</span></div><div class="l">ТЭН</div></div>
+      <div class="stat"><div class="v small" id="stateTxt">—</div><div class="l">состояние</div></div>
+      <div class="stat"><div class="v small" id="stepTxt">—</div><div class="l">шаг</div></div>
+      <div class="stat"><div class="v small" id="elapsed">0:00</div><div class="l">время варки</div></div>
+    </div>
+    <div class="row">
+      <canvas id="chart" width="880" height="320"></canvas>
+    </div>
+  </div>
+
+  <div class="card">
+    <b>Температурный профиль</b>
+    <table>
+      <thead><tr><th>#</th><th>Температура, °C</th><th>Выдержка, мин</th><th></th></tr></thead>
+      <tbody id="steps"></tbody>
+    </table>
+    <div class="row">
+      <button class="ghost" id="addStep">+ шаг</button>
+    </div>
+
+    <div class="row">
+      <input type="text" id="profName" placeholder="имя профиля" maxlength="31">
+      <button id="saveProfile">💾 Сохранить</button>
+      <div class="spacer"></div>
+      <select id="savedList"><option value="">— сохранённые —</option></select>
+      <button class="ghost" id="loadProfile">📂 Загрузить</button>
+      <button class="ghost" id="delProfile">🗑</button>
+    </div>
+
+    <div class="row">
+      <button class="primary" id="start">▶ Старт</button>
+      <button class="stop" id="stop">■ Стоп</button>
+      <div class="spacer"></div>
+      <label class="hint">ускорение:&nbsp;</label>
+      <select id="scale">
+        <option value="1">x1 (реальное)</option>
+        <option value="10">x10</option>
+        <option value="20" selected>x20</option>
+        <option value="60">x60</option>
+        <option value="120">x120</option>
+      </select>
+    </div>
+    <div class="hint">Датчик DS18B20 ещё не подключён — температура моделируется термо-моделью
+      (нагрев ТЭНом + остывание). Регулятор bang-bang с гистерезисом; логика та же, что будет
+      работать с реальным железом.</div>
+  </div>
+
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+let profile = [];          // [{temp,dur(сек)}]
+let history = [];          // [{t(сек), temp}]
+let lastState = 'idle';
+
+// ---------- API ----------
+async function getStatus(){
+  try{ const r = await fetch('/api/status'); return await r.json(); }
+  catch(e){ return null; }
+}
+async function postJSON(url, obj){
+  const r = await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},
+                             body:JSON.stringify(obj)});
+  return r.ok;
+}
+
+// ---------- Редактор профиля ----------
+function renderSteps(){
+  const tb = $('steps'); tb.innerHTML='';
+  profile.forEach((s,i)=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${i+1}</td>
+      <td><input type="number" step="0.5" value="${s.temp}" data-i="${i}" data-k="temp"></td>
+      <td><input type="number" step="1" value="${Math.round(s.dur/60)}" data-i="${i}" data-k="dur"></td>
+      <td><button class="ghost" data-del="${i}">✕</button></td>`;
+    tb.appendChild(tr);
+  });
+  tb.querySelectorAll('input').forEach(inp=>{
+    inp.onchange = e=>{
+      const i=+e.target.dataset.i, k=e.target.dataset.k, v=parseFloat(e.target.value)||0;
+      profile[i][k] = (k==='dur') ? Math.max(0,v)*60 : v;
+      drawChart();
+    };
+  });
+  tb.querySelectorAll('[data-del]').forEach(b=>{
+    b.onclick = e=>{ profile.splice(+e.target.dataset.del,1); renderSteps(); drawChart(); };
+  });
+}
+function currentSteps(){ return profile.map(s=>({temp:s.temp,dur:Math.round(s.dur)})); }
+
+$('addStep').onclick = ()=>{ profile.push({temp:65,dur:600}); renderSteps(); drawChart(); };
+
+// ---- Библиотека профилей (сохранение/загрузка в NVS платы) ----
+async function refreshProfiles(){
+  try{
+    const r = await fetch('/api/profiles'); const j = await r.json();
+    const sel = $('savedList'), cur = sel.value;
+    sel.innerHTML = '<option value="">— сохранённые —</option>';
+    (j.profiles||[]).forEach(n=>{
+      const o=document.createElement('option'); o.value=n; o.textContent=n; sel.appendChild(o);
+    });
+    if([...sel.options].some(o=>o.value===cur)) sel.value=cur;
+  }catch(e){}
+}
+
+function flash(btn, txt, ms=1200){
+  const old=btn.textContent; btn.textContent=txt;
+  setTimeout(()=>btn.textContent=old, ms);
+}
+
+$('saveProfile').onclick = async ()=>{
+  const name = $('profName').value.trim();
+  if(!name){ $('profName').focus(); flash($('saveProfile'),'Введите имя'); return; }
+  if(!profile.length){ flash($('saveProfile'),'Пустой профиль'); return; }
+  const ok = await postJSON('/api/profiles/save',{name, steps:currentSteps()});
+  flash($('saveProfile'), ok?'✓ Сохранено':'Ошибка');
+  if(ok){ await refreshProfiles(); $('savedList').value=name; }
+};
+
+$('loadProfile').onclick = async ()=>{
+  const name = $('savedList').value;
+  if(!name){ flash($('loadProfile'),'Выберите'); return; }
+  const r = await fetch('/api/profiles/load',{method:'POST',
+            headers:{'Content-Type':'application/json'},body:JSON.stringify({name})});
+  if(!r.ok){ flash($('loadProfile'),'Ошибка'); return; }
+  const j = await r.json();
+  profile = (j.steps||[]).map(s=>({temp:s.temp,dur:s.dur}));
+  $('profName').value = j.name || name;
+  history=[];
+  renderSteps(); drawChart();
+  flash($('loadProfile'),'✓ Загружено');
+};
+
+$('delProfile').onclick = async ()=>{
+  const name = $('savedList').value;
+  if(!name){ flash($('delProfile'),'?'); return; }
+  if(!confirm('Удалить профиль «'+name+'»?')) return;
+  const ok = await postJSON('/api/profiles/delete',{name});
+  if(ok) await refreshProfiles();
+};
+
+$('start').onclick = async ()=>{
+  const timeScale = parseFloat($('scale').value);
+  history=[];               // новый прогон — чистим график
+  // применяем текущий профиль из редактора и стартуем
+  await postJSON('/api/profile',{steps:currentSteps()});
+  await postJSON('/api/control',{action:'start',timeScale});
+};
+$('stop').onclick = ()=> postJSON('/api/control',{action:'stop'});
+$('scale').onchange = ()=> postJSON('/api/control',{timeScale:parseFloat($('scale').value)});
+
+// ---------- График ----------
+function fmtTime(sec){
+  sec=Math.max(0,Math.round(sec));
+  const m=Math.floor(sec/60), s=sec%60;
+  return m+':'+String(s).padStart(2,'0');
+}
+
+function drawChart(curElapsed=0, curTemp=null){
+  const cv=$('chart'), ctx=cv.getContext('2d');
+  // подгоняем разрешение под devicePixelRatio
+  const dpr=window.devicePixelRatio||1, W=cv.clientWidth, H=cv.clientHeight;
+  if(cv.width!==W*dpr||cv.height!==H*dpr){cv.width=W*dpr;cv.height=H*dpr;}
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,W,H);
+
+  const padL=44,padR=12,padT=12,padB=26;
+  const plotW=W-padL-padR, plotH=H-padT-padB;
+
+  // диапазоны
+  const plannedTotal = profile.reduce((a,s)=>a+s.dur,0);       // сек (только выдержки)
+  const maxElapsed   = history.length?history[history.length-1].t:0;
+  let xMaxSec = Math.max(plannedTotal, maxElapsed, 60)*1.05;
+  const temps = profile.map(s=>s.temp).concat([curTemp||20]);
+  let yMax = Math.max(85, Math.ceil((Math.max(...temps)+8)/5)*5);
+  let yMin = 15;
+
+  const X = sec => padL + plotW * (sec/xMaxSec);
+  const Y = t   => padT + plotH * (1-(t-yMin)/(yMax-yMin));
+
+  // сетка + оси
+  ctx.strokeStyle='#22303d'; ctx.fillStyle='#8aa0b4'; ctx.lineWidth=1;
+  ctx.font='11px system-ui'; ctx.textBaseline='middle';
+  for(let t=yMin;t<=yMax;t+=10){
+    ctx.beginPath();ctx.moveTo(padL,Y(t));ctx.lineTo(W-padR,Y(t));ctx.stroke();
+    ctx.textAlign='right';ctx.fillText(t,padL-6,Y(t));
+  }
+  const stepMin = xMaxSec>3600?600:300;   // подпись оси X
+  ctx.textAlign='center';ctx.textBaseline='top';
+  for(let sec=0;sec<=xMaxSec;sec+=stepMin){
+    ctx.beginPath();ctx.moveTo(X(sec),padT);ctx.lineTo(X(sec),padT+plotH);ctx.stroke();
+    ctx.fillText(Math.round(sec/60)+'м',X(sec),padT+plotH+6);
+  }
+
+  // плановый профиль (ступени уставки)
+  if(profile.length){
+    ctx.strokeStyle='#4aa3ff';ctx.lineWidth=2;ctx.setLineDash([6,4]);
+    ctx.beginPath();
+    let x=0;
+    profile.forEach((s,i)=>{
+      if(i===0) ctx.moveTo(X(0),Y(s.temp)); else ctx.lineTo(X(x),Y(s.temp));
+      ctx.lineTo(X(x+s.dur),Y(s.temp));
+      x+=s.dur;
+    });
+    ctx.stroke();ctx.setLineDash([]);
+    // подписи температур
+    ctx.fillStyle='#4aa3ff';ctx.textAlign='left';ctx.textBaseline='bottom';
+    x=0;profile.forEach(s=>{ctx.fillText(s.temp+'°',X(x)+4,Y(s.temp)-2);x+=s.dur;});
+  }
+
+  // фактическая температура
+  if(history.length){
+    ctx.strokeStyle='#ff8c42';ctx.lineWidth=2.2;ctx.beginPath();
+    history.forEach((p,i)=> i?ctx.lineTo(X(p.t),Y(p.temp)):ctx.moveTo(X(p.t),Y(p.temp)));
+    ctx.stroke();
+  }
+
+  // маркер текущего момента
+  if(curTemp!==null){
+    ctx.fillStyle='#ff8c42';
+    ctx.beginPath();ctx.arc(X(curElapsed),Y(curTemp),4,0,7);ctx.fill();
+  }
+
+  // легенда
+  ctx.textAlign='left';ctx.textBaseline='middle';ctx.font='11px system-ui';
+  ctx.fillStyle='#4aa3ff';ctx.fillText('— уставка (план)',padL+8,padT+10);
+  ctx.fillStyle='#ff8c42';ctx.fillText('— факт',padL+128,padT+10);
+}
+
+// ---------- Опрос статуса ----------
+async function tick(){
+  const st = await getStatus();
+  if(st){
+    // синхронизируем профиль из прошивки при первой загрузке / после stop
+    if(profile.length===0 && st.profile) {
+      profile = st.profile.map(s=>({temp:s.temp,dur:s.dur}));
+      renderSteps();
+    }
+    $('temp').textContent    = st.temp.toFixed(1);
+    $('target').textContent  = st.target.toFixed(1);
+    $('heater').textContent  = st.heater?'ВКЛ':'выкл';
+    $('heaterDot').className  = 'dot'+(st.heater?' on':'');
+    $('elapsed').textContent = fmtTime(st.totalElapsed);
+    $('stepTxt').textContent = st.stepCount?`${Math.min(st.step+1,st.stepCount)} / ${st.stepCount}`:'—';
+    const sMap={idle:'ожидание',running:'варка идёт',done:'завершено'};
+    $('stateTxt').textContent=sMap[st.state]||st.state;
+    $('stateTxt').className='v small state-'+st.state;
+
+    // накопление истории во время варки
+    if(st.state==='running'){
+      const last=history[history.length-1];
+      if(!last || st.totalElapsed>=last.t)
+        history.push({t:st.totalElapsed,temp:st.temp});
+    }
+    drawChart(st.totalElapsed, st.temp);
+    lastState=st.state;
+  }
+}
+
+renderSteps();
+drawChart();
+refreshProfiles();
+tick();
+setInterval(tick,1000);
+window.addEventListener('resize',()=>drawChart());
+</script>
+</body>
+</html>

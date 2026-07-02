@@ -1,0 +1,20 @@
+# ESP-IDF build output
+/build/
+
+# Скачиваемые менеджером компонентов зависимости (восстанавливаются из dependencies.lock)
+/managed_components/
+
+# Резервная копия конфигурации
+sdkconfig.old
+sdkconfig.defaults.old
+
+# Python
+__pycache__/
+*.pyc
+
+# Редакторы / ОС
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store

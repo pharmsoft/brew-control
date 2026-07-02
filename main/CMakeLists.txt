@@ -1,0 +1,19 @@
+idf_component_register(
+    SRCS
+        "brewcontrol.c"
+        "brew_control.c"
+        "wifi_ap.c"
+        "web_server.c"
+        "profile_store.c"
+    INCLUDE_DIRS "."
+    REQUIRES
+        esp_wifi
+        esp_event
+        esp_netif
+        nvs_flash
+        esp_http_server
+        esp_timer
+        cjson
+    EMBED_FILES
+        "web/index.html"
+)
