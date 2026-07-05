@@ -7,6 +7,7 @@
 #include "web_server.h"
 #include "brew_control.h"
 #include "profile_store.h"
+#include "ota_update.h"
 
 static const char *TAG = "app";
 
@@ -35,6 +36,7 @@ void app_main(void)
     wifi_init();           // AP+STA: точка доступа + подключение к роутеру (+ init NVS)
     profile_store_init();  // библиотека именованных профилей в NVS
     web_server_start();    // веб-интерфейс + REST API + OTA
+    ota_update_init();     // удалённые обновления по воздуху с GitHub
 
     // Дошли сюда без паники/зависания — считаем прошивку исправной и отменяем
     // откат. Без этого следующая перезагрузка вернёт предыдущую прошивку.

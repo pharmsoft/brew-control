@@ -2,6 +2,7 @@
 #include "brew_control.h"
 #include "profile_store.h"
 #include "wifi_ap.h"
+#include "ota_update.h"
 
 #include <string.h>
 #include <stdlib.h>
@@ -46,8 +47,9 @@ static esp_err_t status_get_handler(httpd_req_t *req)
     cJSON_AddNumberToObject(sys, "resetReason", esp_reset_reason());
     cJSON_AddItemToObject(root, "sys", sys);
 
-    // Состояние подключения к роутеру.
+    // Состояние подключения к роутеру и обновлений.
     wifi_status_json(root);
+    ota_status_json(root);
 
     char *out = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
@@ -343,6 +345,33 @@ static esp_err_t ota_post_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
+// POST /api/ota/check — запустить проверку обновления с GitHub.
+static esp_err_t ota_check_handler(httpd_req_t *req)
+{
+    ota_check_now();
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_sendstr(req, "{\"ok\":true}");
+    return ESP_OK;
+}
+
+// POST /api/ota/config  тело: {"url":"...","auto":true}
+static esp_err_t ota_config_handler(httpd_req_t *req)
+{
+    char *body = read_body(req);
+    if (!body) { httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "bad body"); return ESP_FAIL; }
+    cJSON *root = cJSON_Parse(body);
+    free(body);
+    if (!root) { httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "bad json"); return ESP_FAIL; }
+    cJSON *url  = cJSON_GetObjectItem(root, "url");
+    cJSON *aut  = cJSON_GetObjectItem(root, "auto");
+    ota_set_config(cJSON_IsString(url) ? url->valuestring : NULL,
+                   cJSON_IsBool(aut) ? cJSON_IsTrue(aut) : true);
+    cJSON_Delete(root);
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_sendstr(req, "{\"ok\":true}");
+    return ESP_OK;
+}
+
 // -----------------------------------------------------------------------------
 
 void web_server_start(void)
@@ -370,6 +399,8 @@ void web_server_start(void)
         { .uri = "/api/wifi", .method = HTTP_GET,  .handler = wifi_get_handler },
         { .uri = "/api/wifi", .method = HTTP_POST, .handler = wifi_post_handler },
         { .uri = "/update",   .method = HTTP_POST, .handler = ota_post_handler },
+        { .uri = "/api/ota/check",  .method = HTTP_POST, .handler = ota_check_handler },
+        { .uri = "/api/ota/config", .method = HTTP_POST, .handler = ota_config_handler },
     };
     for (size_t i = 0; i < sizeof(uris) / sizeof(uris[0]); i++) {
         httpd_register_uri_handler(server, &uris[i]);

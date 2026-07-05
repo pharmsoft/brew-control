@@ -128,7 +128,27 @@
   </div>
 
   <div class="card">
-    <b>Обновление прошивки (OTA)</b>
+    <b>Обновление из интернета (GitHub)</b>
+    <div class="stats" style="margin-top:10px">
+      <div class="stat"><div class="v small" id="otaCur">—</div><div class="l">установлено</div></div>
+      <div class="stat"><div class="v small" id="otaAvail">—</div><div class="l">доступно</div></div>
+      <div class="stat"><div class="v small" id="otaState">—</div><div class="l">статус</div></div>
+    </div>
+    <div class="hint" id="otaNetMsg" style="margin-bottom:6px"></div>
+    <div class="row">
+      <button class="primary" id="otaCheck" type="button">🔄 Проверить обновление</button>
+      <label class="hint" style="display:flex;align-items:center;gap:6px">
+        <input type="checkbox" id="otaAuto"> автопроверка (раз в час)
+      </label>
+    </div>
+    <div class="row">
+      <input type="text" id="otaUrl" placeholder="URL манифеста" style="flex:1;min-width:220px">
+      <button class="ghost" id="otaSaveUrl" type="button">Сохранить URL</button>
+    </div>
+    <div class="hint">Контроллер сам качает новую прошивку из GitHub Releases по HTTPS,
+      проверяет образ и обновляется. При сбое — автоматический откат.</div>
+
+    <b style="display:block;margin-top:18px">Обновление файлом (локально)</b>
     <div class="row">
       <input type="file" id="fwFile" accept=".bin">
       <button id="doOta">⬆ Прошить</button>
@@ -360,6 +380,18 @@ async function tick(){
       $('sysUp').textContent   = fmtUptime(st.sys.uptime);
       $('sysHeap').textContent = Math.round(st.sys.freeHeap/1024)+' КБ';
     }
+    if(st.ota){
+      $('otaCur').textContent   = 'v'+st.ota.curVersion;
+      $('otaAvail').textContent = st.ota.availVersion ? 'v'+st.ota.availVersion : '—';
+      const oMap={idle:'ожидание',checking:'проверка…',updating:'обновление…',
+                  uptodate:'актуально',error:'ошибка'};
+      $('otaState').textContent = oMap[st.ota.state]||st.ota.state;
+      $('otaState').style.color = st.ota.state==='error' ? 'var(--hot)'
+                                : st.ota.state==='uptodate' ? 'var(--ok)' : 'var(--txt)';
+      $('otaNetMsg').textContent = st.ota.msg||'';
+      if(document.activeElement!==$('otaUrl') && !$('otaUrl').value) $('otaUrl').value=st.ota.url;
+      if(document.activeElement!==$('otaAuto')) $('otaAuto').checked = !!st.ota.auto;
+    }
 
     // накопление истории во время варки
     if(st.state==='running'){
@@ -400,7 +432,18 @@ $('saveWifi').onclick = async ()=>{
   }
 };
 
-// ---------- OTA ----------
+// ---------- OTA из интернета ----------
+$('otaCheck').onclick = async ()=>{
+  const ok = await postJSON('/api/ota/check',{});
+  flash($('otaCheck'), ok?'🔄 Проверяю…':'Ошибка');
+};
+$('otaSaveUrl').onclick = async ()=>{
+  const ok = await postJSON('/api/ota/config',{url:$('otaUrl').value.trim(), auto:$('otaAuto').checked});
+  flash($('otaSaveUrl'), ok?'✓':'Ошибка');
+};
+$('otaAuto').onchange = ()=> postJSON('/api/ota/config',{url:$('otaUrl').value.trim(), auto:$('otaAuto').checked});
+
+// ---------- OTA файлом ----------
 $('doOta').onclick = ()=>{
   const f = $('fwFile').files[0];
   if(!f){ flash($('doOta'),'Выбери файл'); return; }

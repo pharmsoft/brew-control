@@ -5,6 +5,7 @@ idf_component_register(
         "wifi_ap.c"
         "web_server.c"
         "profile_store.c"
+        "ota_update.c"
     INCLUDE_DIRS "."
     REQUIRES
         esp_wifi
@@ -16,6 +17,10 @@ idf_component_register(
         esp_system
         app_update
         esp_app_format
+        esp_https_ota
+        esp_http_client
+        esp-tls
+        mbedtls
         cjson
     EMBED_FILES
         "web/index.html"

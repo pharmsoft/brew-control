@@ -14,3 +14,10 @@ CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
 
 # HTTP-сервер: разрешаем длинные тела и достаточный стек для приёма прошивки
 CONFIG_HTTPD_MAX_REQ_HDR_LEN=1024
+
+# Встроенный набор корневых сертификатов (TLS к GitHub для OTA)
+CONFIG_MBEDTLS_CERTIFICATE_BUNDLE=y
+CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_DEFAULT_FULL=y
+
+# Разрешить esp_http_client следовать HTTPS-редиректам (GitHub Releases → CDN)
+CONFIG_ESP_HTTP_CLIENT_ENABLE_HTTPS=y
