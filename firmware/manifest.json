@@ -1,5 +1,5 @@
 {
-  "version": "0.6.0",
-  "url": "https://github.com/pharmsoft/brew-control/releases/download/v0.6.0/brewcontrol.bin",
-  "notes": "OTA: фикс буфера esp_http_client для GitHub CDN"
+  "version": "0.7.0",
+  "url": "https://github.com/pharmsoft/brew-control/releases/download/v0.7.0/brewcontrol.bin",
+  "notes": "Телеметрия и удалённое управление по MQTT"
 }
