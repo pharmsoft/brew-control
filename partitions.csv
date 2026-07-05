@@ -1,0 +1,9 @@
+# Таблица разделов для OTA с откатом (flash 4 МБ).
+# Два равнозначных слота приложения ota_0/ota_1 (по 1.5 МБ) — активный
+# определяется данными otadata; неудачная прошивка откатывается на прошлую.
+# Name,     Type, SubType, Offset,   Size,     Flags
+nvs,        data, nvs,     0x9000,   0x6000,
+otadata,    data, ota,     0xf000,   0x2000,
+phy_init,   data, phy,     0x11000,  0x1000,
+ota_0,      app,  ota_0,   0x20000,  0x180000,
+ota_1,      app,  ota_1,   0x1A0000, 0x180000,

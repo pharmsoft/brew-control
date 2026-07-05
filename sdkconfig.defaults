@@ -1,0 +1,16 @@
+# Целевой чип
+CONFIG_IDF_TARGET="esp32"
+
+# Реальный размер flash на модуле — 4 МБ (нужно для двух OTA-слотов)
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+CONFIG_ESPTOOLPY_FLASHSIZE="4MB"
+
+# Своя таблица разделов с двумя OTA-слотами
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+
+# Поддержка отката прошивки в загрузчике (нужно для esp_ota_mark_app_valid_cancel_rollback)
+CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
+
+# HTTP-сервер: разрешаем длинные тела и достаточный стек для приёма прошивки
+CONFIG_HTTPD_MAX_REQ_HDR_LEN=1024

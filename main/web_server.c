@@ -1,12 +1,19 @@
 #include "web_server.h"
 #include "brew_control.h"
 #include "profile_store.h"
+#include "wifi_ap.h"
 
 #include <string.h>
 #include <stdlib.h>
 
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "esp_http_server.h"
 #include "esp_log.h"
+#include "esp_system.h"
+#include "esp_timer.h"
+#include "esp_app_desc.h"
+#include "esp_ota_ops.h"
 #include "cJSON.h"
 
 static const char *TAG = "web";
@@ -28,6 +35,20 @@ static esp_err_t root_get_handler(httpd_req_t *req)
 static esp_err_t status_get_handler(httpd_req_t *req)
 {
     cJSON *root = brew_status_json();
+
+    // Диагностика системы.
+    cJSON *sys = cJSON_CreateObject();
+    const esp_app_desc_t *app = esp_app_get_description();
+    cJSON_AddStringToObject(sys, "version",   app->version);
+    cJSON_AddNumberToObject(sys, "uptime",    (double)(esp_timer_get_time() / 1000000));
+    cJSON_AddNumberToObject(sys, "freeHeap",  esp_get_free_heap_size());
+    cJSON_AddNumberToObject(sys, "minHeap",   esp_get_minimum_free_heap_size());
+    cJSON_AddNumberToObject(sys, "resetReason", esp_reset_reason());
+    cJSON_AddItemToObject(root, "sys", sys);
+
+    // Состояние подключения к роутеру.
+    wifi_status_json(root);
+
     char *out = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
 
@@ -239,13 +260,92 @@ static esp_err_t profiles_delete_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
+// GET /api/wifi  →  {"wifi":{connected,ssid,ip,rssi}}
+static esp_err_t wifi_get_handler(httpd_req_t *req)
+{
+    cJSON *root = cJSON_CreateObject();
+    wifi_status_json(root);
+    char *out = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_sendstr(req, out ? out : "{}");
+    cJSON_free(out);
+    return ESP_OK;
+}
+
+// POST /api/wifi  тело: {"ssid":"...","pass":"..."}
+static esp_err_t wifi_post_handler(httpd_req_t *req)
+{
+    char *body = read_body(req);
+    if (!body) { httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "bad body"); return ESP_FAIL; }
+    cJSON *root = cJSON_Parse(body);
+    free(body);
+    cJSON *ssid = root ? cJSON_GetObjectItem(root, "ssid") : NULL;
+    cJSON *pass = root ? cJSON_GetObjectItem(root, "pass") : NULL;
+    bool ok = cJSON_IsString(ssid) &&
+              wifi_set_sta_creds(ssid->valuestring,
+                                 cJSON_IsString(pass) ? pass->valuestring : "");
+    cJSON_Delete(root);
+    if (!ok) { httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "bad creds"); return ESP_FAIL; }
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_sendstr(req, "{\"ok\":true}");
+    return ESP_OK;
+}
+
+// POST /update  — приём образа прошивки (application/octet-stream) в неактивный
+// OTA-слот. При успехе выставляет его загрузочным и перезагружает контроллер.
+static esp_err_t ota_post_handler(httpd_req_t *req)
+{
+    const esp_partition_t *part = esp_ota_get_next_update_partition(NULL);
+    if (!part) { httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "no ota part"); return ESP_FAIL; }
+    ESP_LOGI(TAG, "OTA: приём в раздел %s (%lu байт заявлено)",
+             part->label, (unsigned long)req->content_len);
+
+    esp_ota_handle_t ota = 0;
+    if (esp_ota_begin(part, OTA_SIZE_UNKNOWN, &ota) != ESP_OK) {
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "ota begin failed");
+        return ESP_FAIL;
+    }
+
+    char buf[1024];
+    int remaining = req->content_len, received = 0;
+    esp_err_t werr = ESP_OK;
+    while (remaining > 0) {
+        int r = httpd_req_recv(req, buf, remaining < (int)sizeof(buf) ? remaining : (int)sizeof(buf));
+        if (r == HTTPD_SOCK_ERR_TIMEOUT) continue;
+        if (r <= 0) { werr = ESP_FAIL; break; }
+        if ((werr = esp_ota_write(ota, buf, r)) != ESP_OK) break;
+        received  += r;
+        remaining -= r;
+    }
+
+    if (werr != ESP_OK || esp_ota_end(ota) != ESP_OK) {
+        if (werr == ESP_OK) esp_ota_end(ota);
+        ESP_LOGE(TAG, "OTA: ошибка записи (принято %d байт)", received);
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "ota write/verify failed");
+        return ESP_FAIL;
+    }
+    if (esp_ota_set_boot_partition(part) != ESP_OK) {
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "set boot failed");
+        return ESP_FAIL;
+    }
+
+    ESP_LOGI(TAG, "OTA: успешно (%d байт). Перезагрузка через 1 с...", received);
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_sendstr(req, "{\"ok\":true,\"msg\":\"Обновлено, перезагрузка...\"}");
+    vTaskDelay(pdMS_TO_TICKS(1000));
+    esp_restart();
+    return ESP_OK;
+}
+
 // -----------------------------------------------------------------------------
 
 void web_server_start(void)
 {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.lru_purge_enable = true;
-    config.max_uri_handlers = 12;
+    config.max_uri_handlers = 16;
+    config.stack_size = 8192;   // запас стека под OTA-приём
 
     httpd_handle_t server = NULL;
     if (httpd_start(&server, &config) != ESP_OK) {
@@ -262,6 +362,9 @@ void web_server_start(void)
         { .uri = "/api/profiles/save",   .method = HTTP_POST, .handler = profiles_save_handler },
         { .uri = "/api/profiles/load",   .method = HTTP_POST, .handler = profiles_load_handler },
         { .uri = "/api/profiles/delete", .method = HTTP_POST, .handler = profiles_delete_handler },
+        { .uri = "/api/wifi", .method = HTTP_GET,  .handler = wifi_get_handler },
+        { .uri = "/api/wifi", .method = HTTP_POST, .handler = wifi_post_handler },
+        { .uri = "/update",   .method = HTTP_POST, .handler = ota_post_handler },
     };
     for (size_t i = 0; i < sizeof(uris) / sizeof(uris[0]); i++) {
         httpd_register_uri_handler(server, &uris[i]);

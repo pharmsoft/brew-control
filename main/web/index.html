@@ -106,6 +106,42 @@
       работать с реальным железом.</div>
   </div>
 
+  <div class="card">
+    <b>Сеть и система</b>
+    <div class="stats" style="margin-top:10px">
+      <div class="stat"><div class="v small" id="wifiState">—</div><div class="l">роутер</div></div>
+      <div class="stat"><div class="v small" id="wifiIp">—</div><div class="l">IP в сети</div></div>
+      <div class="stat"><div class="v small" id="wifiRssi">—</div><div class="l">сигнал</div></div>
+      <div class="stat"><div class="v small" id="sysVer">—</div><div class="l">прошивка</div></div>
+      <div class="stat"><div class="v small" id="sysUp">—</div><div class="l">аптайм</div></div>
+      <div class="stat"><div class="v small" id="sysHeap">—</div><div class="l">свободно ОЗУ</div></div>
+    </div>
+    <div class="row">
+      <input type="text" id="ssid" placeholder="имя Wi-Fi роутера" maxlength="32">
+      <input type="text" id="wpass" placeholder="пароль" maxlength="64">
+      <button id="saveWifi">Подключить</button>
+    </div>
+    <div class="hint">Контроллер держит свою точку <b>BrewControl</b> и одновременно подключается
+      к домашнему роутеру. После подключения к роутеру он доступен по IP в общей сети.</div>
+  </div>
+
+  <div class="card">
+    <b>Обновление прошивки (OTA)</b>
+    <div class="row">
+      <input type="file" id="fwFile" accept=".bin">
+      <button id="doOta">⬆ Прошить</button>
+    </div>
+    <div id="otaBarWrap" style="display:none;margin-top:10px">
+      <div style="background:#0b131b;border:1px solid var(--line);border-radius:6px;height:18px;overflow:hidden">
+        <div id="otaBar" style="height:100%;width:0;background:var(--ok);transition:width .2s"></div>
+      </div>
+      <div class="hint" id="otaMsg">загрузка...</div>
+    </div>
+    <div class="hint">Выбери файл <code>build/brewcontrol.bin</code>. После загрузки контроллер
+      проверит образ, перезапишет неактивный слот и перезагрузится. Если новая прошивка не
+      стартует — автоматически откатится на предыдущую.</div>
+  </div>
+
 </div>
 
 <script>
@@ -307,6 +343,20 @@ async function tick(){
     $('stateTxt').textContent=sMap[st.state]||st.state;
     $('stateTxt').className='v small state-'+st.state;
 
+    // диагностика сети и системы
+    if(st.wifi){
+      $('wifiState').textContent = st.wifi.connected ? 'подключён' : (st.wifi.ssid?'нет связи':'не задан');
+      $('wifiState').style.color = st.wifi.connected ? 'var(--ok)' : 'var(--muted)';
+      $('wifiIp').textContent    = st.wifi.ip || '—';
+      $('wifiRssi').textContent  = (st.wifi.rssi!==undefined) ? st.wifi.rssi+' dBm' : '—';
+      if(st.wifi.ssid && !$('ssid').value) $('ssid').placeholder = st.wifi.ssid+' (тек.)';
+    }
+    if(st.sys){
+      $('sysVer').textContent  = 'v'+st.sys.version;
+      $('sysUp').textContent   = fmtUptime(st.sys.uptime);
+      $('sysHeap').textContent = Math.round(st.sys.freeHeap/1024)+' КБ';
+    }
+
     // накопление истории во время варки
     if(st.state==='running'){
       const last=history[history.length-1];
@@ -317,6 +367,52 @@ async function tick(){
     lastState=st.state;
   }
 }
+
+function fmtUptime(sec){
+  sec=Math.round(sec);
+  const d=Math.floor(sec/86400), h=Math.floor(sec%86400/3600), m=Math.floor(sec%3600/60);
+  if(d) return d+'д '+h+'ч';
+  if(h) return h+'ч '+m+'м';
+  return m+'м';
+}
+
+// ---------- Сеть ----------
+$('saveWifi').onclick = async ()=>{
+  const ssid=$('ssid').value.trim();
+  if(!ssid){ $('ssid').focus(); return; }
+  const ok = await postJSON('/api/wifi',{ssid, pass:$('wpass').value});
+  flash($('saveWifi'), ok?'✓ Подключаюсь...':'Ошибка');
+  $('wpass').value='';
+};
+
+// ---------- OTA ----------
+$('doOta').onclick = ()=>{
+  const f = $('fwFile').files[0];
+  if(!f){ flash($('doOta'),'Выбери файл'); return; }
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST','/update',true);
+  xhr.setRequestHeader('Content-Type','application/octet-stream');
+  $('otaBarWrap').style.display='block';
+  $('doOta').disabled=true;
+  xhr.upload.onprogress = e=>{
+    if(e.lengthComputable){
+      const p=Math.round(e.loaded/e.total*100);
+      $('otaBar').style.width=p+'%';
+      $('otaMsg').textContent='загрузка '+p+'%';
+    }
+  };
+  xhr.onload = ()=>{
+    if(xhr.status===200){
+      $('otaMsg').textContent='✓ Прошито! Контроллер перезагружается (~15 с)...';
+      $('otaBar').style.width='100%';
+    } else {
+      $('otaMsg').textContent='Ошибка: '+xhr.responseText;
+      $('doOta').disabled=false;
+    }
+  };
+  xhr.onerror = ()=>{ $('otaMsg').textContent='Ошибка соединения'; $('doOta').disabled=false; };
+  xhr.send(f);
+};
 
 renderSteps();
 drawChart();
