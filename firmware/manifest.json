@@ -1,5 +1,5 @@
 {
-  "version": "0.4.0",
-  "url": "https://github.com/pharmsoft/brew-control/releases/download/v0.4.0/brewcontrol.bin",
-  "notes": "GitHub OTA + удалённая диагностика"
+  "version": "0.5.0",
+  "url": "https://github.com/pharmsoft/brew-control/releases/download/v0.5.0/brewcontrol.bin",
+  "notes": "OTA: фикс буфера esp_http_client для GitHub CDN (esp_https_ota)"
 }

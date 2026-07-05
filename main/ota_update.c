@@ -155,10 +155,14 @@ static void do_check(void)
     snprintf(s_msg, sizeof(s_msg), "загрузка версии %s...", ver->valuestring);
 
     esp_http_client_config_t http = {
-        .url               = url->valuestring,
-        .crt_bundle_attach = esp_crt_bundle_attach,
-        .timeout_ms        = 20000,
-        .keep_alive_enable = true,
+        .url                   = url->valuestring,
+        .crt_bundle_attach     = esp_crt_bundle_attach,
+        .timeout_ms            = 20000,
+        .keep_alive_enable     = true,
+        // GitHub Releases редиректит на CDN с длинным подписанным URL — буфер
+        // запроса по умолчанию (1 КБ) переполняется ("Out of buffer"). Увеличиваем.
+        .buffer_size           = 4096,
+        .buffer_size_tx        = 4096,
     };
     esp_https_ota_config_t ota = { .http_config = &http };
 
