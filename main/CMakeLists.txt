@@ -6,6 +6,7 @@ idf_component_register(
         "web_server.c"
         "profile_store.c"
         "ota_update.c"
+        "telemetry.c"
     INCLUDE_DIRS "."
     REQUIRES
         esp_wifi
@@ -21,6 +22,7 @@ idf_component_register(
         esp_http_client
         esp-tls
         mbedtls
+        mqtt
         cjson
     EMBED_FILES
         "web/index.html"

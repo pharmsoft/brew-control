@@ -164,6 +164,34 @@
       стартует — автоматически откатится на предыдущую.</div>
   </div>
 
+  <div class="card">
+    <b>Телеметрия и удалённое управление (MQTT)</b>
+    <div class="stats" style="margin-top:10px">
+      <div class="stat"><div class="v small" id="mqttState">—</div><div class="l">брокер</div></div>
+      <div class="stat"><div class="v small" id="mqttTopic">—</div><div class="l">топик</div></div>
+    </div>
+    <div class="row">
+      <input type="text" id="mqttUri" placeholder="mqtts://хост:8883" style="flex:1;min-width:220px">
+    </div>
+    <div class="row">
+      <input type="text" id="mqttUser" placeholder="логин">
+      <input type="text" id="mqttPass" placeholder="пароль">
+      <input type="text" id="mqttTopicIn" placeholder="топик (brewcontrol)">
+    </div>
+    <div class="row">
+      <label class="hint" style="display:flex;align-items:center;gap:6px">
+        <input type="checkbox" id="mqttEnabled"> включить
+      </label>
+      <button class="primary" id="mqttSave" type="button">Сохранить и подключить</button>
+      <span class="hint" id="mqttMsg"></span>
+    </div>
+    <div class="hint">Устройство за NAT — само подключается к брокеру (исходящее соединение) и
+      публикует статус в <code>&lt;топик&gt;/telemetry</code>, presence в <code>/online</code>,
+      принимает команды в <code>/cmd</code> (<code>{"action":"start|stop|check_update"}</code>).
+      Для <code>mqtts://</code> сертификат брокера проверяется по встроенному CA-набору
+      (подходит HiveMQ Cloud и др.).</div>
+  </div>
+
 </div>
 
 <script>
@@ -392,6 +420,17 @@ async function tick(){
       if(document.activeElement!==$('otaUrl') && !$('otaUrl').value) $('otaUrl').value=st.ota.url;
       if(document.activeElement!==$('otaAuto')) $('otaAuto').checked = !!st.ota.auto;
     }
+    if(st.mqtt){
+      $('mqttState').textContent = !st.mqtt.enabled ? 'выключен'
+                                 : st.mqtt.connected ? 'подключён' : 'нет связи';
+      $('mqttState').style.color = st.mqtt.connected ? 'var(--ok)'
+                                 : st.mqtt.enabled ? 'var(--hot)' : 'var(--muted)';
+      $('mqttTopic').textContent = st.mqtt.topic||'—';
+      const a=document.activeElement;
+      if(a!==$('mqttUri') && !$('mqttUri').value) $('mqttUri').value=st.mqtt.uri||'';
+      if(a!==$('mqttTopicIn') && !$('mqttTopicIn').value) $('mqttTopicIn').placeholder=(st.mqtt.topic||'brewcontrol');
+      if(a!==$('mqttEnabled')) $('mqttEnabled').checked=!!st.mqtt.enabled;
+    }
 
     // накопление истории во время варки
     if(st.state==='running'){
@@ -442,6 +481,18 @@ $('otaSaveUrl').onclick = async ()=>{
   flash($('otaSaveUrl'), ok?'✓':'Ошибка');
 };
 $('otaAuto').onchange = ()=> postJSON('/api/ota/config',{url:$('otaUrl').value.trim(), auto:$('otaAuto').checked});
+
+// ---------- MQTT ----------
+$('mqttSave').onclick = async ()=>{
+  const btn=$('mqttSave'); btn.disabled=true;
+  $('mqttMsg').textContent='сохраняю…';
+  const ok = await postJSON('/api/mqtt',{
+    uri:$('mqttUri').value.trim(), user:$('mqttUser').value, pass:$('mqttPass').value,
+    topic:$('mqttTopicIn').value.trim(), enabled:$('mqttEnabled').checked });
+  btn.disabled=false;
+  $('mqttMsg').textContent = ok ? '✓ сохранено, подключаюсь…' : '⚠ ошибка';
+  $('mqttPass').value='';
+};
 
 // ---------- OTA файлом ----------
 $('doOta').onclick = ()=>{

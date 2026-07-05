@@ -3,6 +3,7 @@
 #include "profile_store.h"
 #include "wifi_ap.h"
 #include "ota_update.h"
+#include "telemetry.h"
 
 #include <string.h>
 #include <stdlib.h>
@@ -50,6 +51,7 @@ static esp_err_t status_get_handler(httpd_req_t *req)
     // Состояние подключения к роутеру и обновлений.
     wifi_status_json(root);
     ota_status_json(root);
+    telemetry_status_json(root);
 
     char *out = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
@@ -372,6 +374,30 @@ static esp_err_t ota_config_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
+// POST /api/mqtt  тело: {"uri":"mqtts://...","user":"","pass":"","topic":"","enabled":true}
+static esp_err_t mqtt_config_handler(httpd_req_t *req)
+{
+    char *body = read_body(req);
+    if (!body) { httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "bad body"); return ESP_FAIL; }
+    cJSON *root = cJSON_Parse(body);
+    free(body);
+    if (!root) { httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "bad json"); return ESP_FAIL; }
+    cJSON *uri = cJSON_GetObjectItem(root, "uri");
+    cJSON *usr = cJSON_GetObjectItem(root, "user");
+    cJSON *pwd = cJSON_GetObjectItem(root, "pass");
+    cJSON *top = cJSON_GetObjectItem(root, "topic");
+    cJSON *en  = cJSON_GetObjectItem(root, "enabled");
+    telemetry_set_config(cJSON_IsString(uri) ? uri->valuestring : NULL,
+                         cJSON_IsString(usr) ? usr->valuestring : NULL,
+                         cJSON_IsString(pwd) ? pwd->valuestring : NULL,
+                         cJSON_IsString(top) ? top->valuestring : NULL,
+                         cJSON_IsBool(en) ? cJSON_IsTrue(en) : false);
+    cJSON_Delete(root);
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_sendstr(req, "{\"ok\":true}");
+    return ESP_OK;
+}
+
 // -----------------------------------------------------------------------------
 
 void web_server_start(void)
@@ -401,6 +427,7 @@ void web_server_start(void)
         { .uri = "/update",   .method = HTTP_POST, .handler = ota_post_handler },
         { .uri = "/api/ota/check",  .method = HTTP_POST, .handler = ota_check_handler },
         { .uri = "/api/ota/config", .method = HTTP_POST, .handler = ota_config_handler },
+        { .uri = "/api/mqtt",       .method = HTTP_POST, .handler = mqtt_config_handler },
     };
     for (size_t i = 0; i < sizeof(uris) / sizeof(uris[0]); i++) {
         httpd_register_uri_handler(server, &uris[i]);
