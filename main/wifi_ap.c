@@ -165,13 +165,18 @@ bool wifi_set_sta_creds(const char *ssid, const char *pass)
     }
     if (!save_sta_creds(ssid, pass ? pass : "")) return false;
 
-    // Переприменяем конфигурацию и переподключаемся.
+    // Только сохраняем и применяем конфигурацию — БЕЗ esp_wifi_connect(),
+    // чтобы не сменить канал AP и не оборвать клиента до отправки HTTP-ответа.
     esp_wifi_disconnect();
     apply_sta_config(ssid, pass ? pass : "");
     s_retry = 0;
-    esp_wifi_connect();
-    ESP_LOGI(TAG, "Данные сети обновлены: \"%s\"", ssid);
+    ESP_LOGI(TAG, "Данные сети сохранены: \"%s\"", ssid);
     return true;
+}
+
+void wifi_sta_connect(void)
+{
+    esp_wifi_connect();
 }
 
 void wifi_status_json(cJSON *root)

@@ -287,8 +287,13 @@ static esp_err_t wifi_post_handler(httpd_req_t *req)
                                  cJSON_IsString(pass) ? pass->valuestring : "");
     cJSON_Delete(root);
     if (!ok) { httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "bad creds"); return ESP_FAIL; }
+
+    // Сначала отдаём ответ клиенту, даём ему уйти в сеть, и только затем
+    // инициируем подключение к роутеру (может сменить канал AP и оборвать клиента).
     httpd_resp_set_type(req, "application/json");
     httpd_resp_sendstr(req, "{\"ok\":true}");
+    vTaskDelay(pdMS_TO_TICKS(400));   // дать ответу уйти в сокет
+    wifi_sta_connect();
     return ESP_OK;
 }
 

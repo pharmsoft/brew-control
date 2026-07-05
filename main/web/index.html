@@ -37,6 +37,7 @@
   button{cursor:pointer;border:none;border-radius:8px;padding:9px 16px;font-size:14px;
          font-weight:600;color:#fff;background:#33475a}
   button.primary{background:var(--ok)} button.stop{background:var(--hot)}
+  button:disabled{opacity:.5;cursor:not-allowed}
   button.ghost{background:transparent;border:1px solid var(--line);color:var(--muted);
                font-weight:500;padding:6px 12px}
   .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px}
@@ -119,8 +120,9 @@
     <div class="row">
       <input type="text" id="ssid" placeholder="имя Wi-Fi роутера" maxlength="32">
       <input type="text" id="wpass" placeholder="пароль" maxlength="64">
-      <button id="saveWifi">Подключить</button>
+      <button class="primary" id="saveWifi" type="button">Подключить</button>
     </div>
+    <div class="hint" id="wifiMsg"></div>
     <div class="hint">Контроллер держит свою точку <b>BrewControl</b> и одновременно подключается
       к домашнему роутеру. После подключения к роутеру он доступен по IP в общей сети.</div>
   </div>
@@ -156,9 +158,11 @@ async function getStatus(){
   catch(e){ return null; }
 }
 async function postJSON(url, obj){
-  const r = await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},
-                             body:JSON.stringify(obj)});
-  return r.ok;
+  try{
+    const r = await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},
+                               body:JSON.stringify(obj)});
+    return r.ok;
+  }catch(e){ return false; }   // сеть отвалилась — не роняем обработчик молча
 }
 
 // ---------- Редактор профиля ----------
@@ -379,10 +383,21 @@ function fmtUptime(sec){
 // ---------- Сеть ----------
 $('saveWifi').onclick = async ()=>{
   const ssid=$('ssid').value.trim();
-  if(!ssid){ $('ssid').focus(); return; }
+  const msg=$('wifiMsg'), btn=$('saveWifi');
+  if(!ssid){ $('ssid').focus(); msg.textContent='Введите имя сети роутера'; return; }
+  // мгновенная обратная связь — сразу видно, что клик сработал
+  btn.disabled=true; btn.textContent='Сохраняю…';
+  msg.textContent='Отправляю настройки на контроллер…';
   const ok = await postJSON('/api/wifi',{ssid, pass:$('wpass').value});
-  flash($('saveWifi'), ok?'✓ Подключаюсь...':'Ошибка');
-  $('wpass').value='';
+  btn.disabled=false; btn.textContent='Подключить';
+  if(ok){
+    msg.innerHTML='✓ Настройки сохранены, подключаюсь к «'+ssid+'». '
+      +'Если вы подключены к точке <b>BrewControl</b>, связь может на пару секунд '
+      +'прерваться — переподключитесь и следите за полем «роутер».';
+    $('wpass').value='';
+  }else{
+    msg.textContent='⚠ Контроллер не ответил. Проверьте подключение к BrewControl и повторите.';
+  }
 };
 
 // ---------- OTA ----------
