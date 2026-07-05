@@ -1,0 +1,40 @@
+name: Сборка прошивки
+
+# Ручная сборка (для проверки) и автосборка+релиз по тегу vX.Y.Z
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write        # нужно, чтобы приложить .bin к релизу
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Сборка через ESP-IDF
+        uses: espressif/esp-idf-ci-action@v1
+        with:
+          esp_idf_version: latest
+          target: esp32
+          path: '.'
+
+      - name: Артефакт сборки
+        uses: actions/upload-artifact@v4
+        with:
+          name: brewcontrol-firmware
+          path: |
+            build/brewcontrol.bin
+            build/bootloader/bootloader.bin
+            build/partition_table/partition-table.bin
+
+      - name: Приложить прошивку к релизу (только для тегов)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/brewcontrol.bin
+          fail_on_unmatched_files: true

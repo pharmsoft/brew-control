@@ -7,19 +7,28 @@
 
 ## Как выпустить обновление
 
-1. Поднять версию в корневом `CMakeLists.txt`:
+Сборка и публикация автоматизированы через GitHub Actions (`.github/workflows/build.yml`):
+при пуше тега `vX.Y.Z` CI собирает прошивку в ESP-IDF и прикладывает `brewcontrol.bin`
+к релизу — локальная машина не нужна.
+
+1. Поднять версию в корневом `CMakeLists.txt` (должна совпасть с тегом):
    ```
-   set(PROJECT_VER "0.4.0")
+   set(PROJECT_VER "0.7.0")
    ```
-2. Собрать: `idf.py build` → образ в `build/brewcontrol.bin`.
-3. Создать GitHub Release с тегом `v0.4.0` и приложить `brewcontrol.bin`:
+2. Обновить `firmware/manifest.json` — `version` и `url` на новый тег.
+3. Закоммитить и создать тег:
    ```
-   gh release create v0.4.0 build/brewcontrol.bin -t "v0.4.0" -n "описание"
+   git commit -am "Релиз 0.7.0"
+   git tag v0.7.0
+   git push && git push --tags
    ```
-4. Обновить `firmware/manifest.json` (version и url на новый тег) и запушить в `main`.
+4. CI соберёт образ и создаст релиз `v0.7.0` с `brewcontrol.bin`.
 
 В течение часа (или сразу по кнопке «Проверить обновление») все контроллеры с доступом
 в интернет подтянут новую прошивку сами.
+
+> Локальная альтернатива без CI: `idf.py build` и
+> `gh release create v0.7.0 build/brewcontrol.bin`.
 
 ## Формат манифеста
 
