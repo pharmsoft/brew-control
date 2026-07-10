@@ -16,3 +16,5 @@ dependencies:
   #   public: true
   espressif/cjson: '*'
   espressif/mqtt: '*'
+  espressif/onewire_bus: '*'
+  espressif/ds18b20: '*'

@@ -7,6 +7,7 @@
 #include "web_server.h"
 #include "brew_control.h"
 #include "profile_store.h"
+#include "temp_sensor.h"
 #include "ota_update.h"
 #include "telemetry.h"
 
@@ -33,6 +34,7 @@ void app_main(void)
     ESP_LOGI(TAG, "=== BrewControl v%s (сборка %s) ===", app->version, app->date);
     ESP_LOGI(TAG, "Причина перезагрузки: %s", reset_reason_str(esp_reset_reason()));
 
+    temp_sensor_init();    // датчик DS18B20 (реальная температура)
     brew_control_init();   // движок профилей + симулятор температуры
     wifi_init();           // AP+STA: точка доступа + подключение к роутеру (+ init NVS)
     profile_store_init();  // библиотека именованных профилей в NVS

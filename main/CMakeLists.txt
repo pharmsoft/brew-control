@@ -7,6 +7,7 @@ idf_component_register(
         "profile_store.c"
         "ota_update.c"
         "telemetry.c"
+        "temp_sensor.c"
     INCLUDE_DIRS "."
     REQUIRES
         esp_wifi
@@ -23,6 +24,8 @@ idf_component_register(
         esp-tls
         mbedtls
         mqtt
+        onewire_bus
+        ds18b20
         cjson
     EMBED_FILES
         "web/index.html"

@@ -9,6 +9,8 @@
 #include "esp_timer.h"
 #include "esp_log.h"
 
+#include "temp_sensor.h"
+
 static const char *TAG = "brew";
 
 // ---- Параметры регулятора и симулятора --------------------------------------
@@ -154,9 +156,15 @@ static void control_task(void *arg)
             s_ctx.heater_on = false;
         }
 
-        // TODO: когда приедет DS18B20 — читать реальную температуру здесь и
-        // выставлять sensor_ok = true. Пока используем термо-модель.
-        simulate_temp(dt);
+        // Реальный датчик имеет приоритет над термо-моделью.
+        float real_t;
+        if (temp_sensor_get(&real_t)) {
+            s_ctx.temp_c    = real_t;
+            s_ctx.sensor_ok = true;
+        } else {
+            simulate_temp(dt);
+            s_ctx.sensor_ok = false;
+        }
         UNLOCK();
     }
 }

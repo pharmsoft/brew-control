@@ -701,6 +701,13 @@ CONFIG_PARTITION_TABLE_MD5=y
 # end of Partition Table
 
 #
+# DS18B20 Configuration
+#
+# default:
+# CONFIG_DS18B20_SENSOR_HUB is not set
+# end of DS18B20 Configuration
+
+#
 # Compiler options
 #
 # default:
