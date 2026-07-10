@@ -151,7 +151,10 @@ static void control_task(void *arg)
         last_us = now_us;
 
         LOCK();
-        float dt = real_dt * s_ctx.time_scale;   // "варочное" время
+        // При подключённом датчике — только реальное время; ускорение допустимо
+        // лишь в режиме симуляции (иначе выдержки профиля идут кратно быстрее).
+        float scale = temp_sensor_present() ? 1.0f : s_ctx.time_scale;
+        float dt = real_dt * scale;              // "варочное" время
 
         if (s_ctx.state == BREW_RUNNING) {
             run_controller();
@@ -287,7 +290,9 @@ cJSON *brew_status_json(void)
     cJSON_AddNumberToObject(root, "stepCount",   s_ctx.step_count);
     cJSON_AddNumberToObject(root, "stepHold",    (int)s_ctx.step_hold_s);
     cJSON_AddNumberToObject(root, "totalElapsed",(int)s_ctx.total_s);
-    cJSON_AddNumberToObject(root, "timeScale",   s_ctx.time_scale);
+    // Отдаём фактическое ускорение: с датчиком оно всегда 1.
+    cJSON_AddNumberToObject(root, "timeScale",
+                            temp_sensor_present() ? 1.0f : s_ctx.time_scale);
 
     cJSON *prof = cJSON_CreateArray();
     for (int i = 0; i < s_ctx.step_count; i++) {

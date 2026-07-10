@@ -395,6 +395,18 @@ async function tick(){
     $('stateTxt').textContent=sMap[st.state]||st.state;
     $('stateTxt').className='v small state-'+st.state;
 
+    // Режим датчика: с реальным DS18B20 ускорение времени принудительно ×1
+    if(st.sensorOk!==undefined){
+      const sc=$('scale');
+      if(st.sensorOk){
+        sc.value='1'; sc.disabled=true; sc.title='С датчиком — реальное время (×1)';
+        $('badge').textContent='датчик DS18B20 · реальное время';
+      } else {
+        sc.disabled=false; sc.title='';
+        $('badge').textContent='прототип · симуляция температуры';
+      }
+    }
+
     // диагностика сети и системы
     if(st.wifi){
       $('wifiState').textContent = st.wifi.connected ? 'подключён' : (st.wifi.ssid?'нет связи':'не задан');
