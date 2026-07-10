@@ -17,6 +17,7 @@ idf_component_register(
         esp_http_server
         esp_timer
         esp_system
+        esp_driver_gpio
         app_update
         esp_app_format
         esp_https_ota

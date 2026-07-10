@@ -8,6 +8,7 @@
 #include "freertos/semphr.h"
 #include "esp_timer.h"
 #include "esp_log.h"
+#include "driver/gpio.h"
 
 #include "temp_sensor.h"
 
@@ -19,6 +20,9 @@ static const char *TAG = "brew";
 #define HYST_LOW            0.5f     // включить ТЭН при temp <= target - HYST_LOW
 #define REACH_BAND          0.3f     // считаем что вышли на температуру в пределах ±REACH_BAND
 #define AMBIENT_C           22.0f    // температура окружающей среды
+
+#define HEATER_GPIO         25       // управляющий вход SSR («+»)
+#define TEMP_LIMIT_C        105.0f   // аварийный предел: выше — принудительно выключить ТЭН
 
 // Термо-модель (в единицах "варочного" времени, т.е. до умножения на масштаб).
 // Равновесная температура при постоянном нагреве = AMBIENT + HEAT_RATE/COOL_COEF.
@@ -165,6 +169,18 @@ static void control_task(void *arg)
             simulate_temp(dt);
             s_ctx.sensor_ok = false;
         }
+
+        // Аварийный предел: при перегреве принудительно гасим ТЭН.
+        if (s_ctx.sensor_ok && s_ctx.temp_c >= TEMP_LIMIT_C) {
+            if (s_ctx.heater_on) {
+                ESP_LOGW(TAG, "АВАРИЯ: %.1f°C >= предела %.0f°C — ТЭН выключен",
+                         s_ctx.temp_c, (float)TEMP_LIMIT_C);
+            }
+            s_ctx.heater_on = false;
+        }
+
+        // Управление твердотельным реле (SSR).
+        gpio_set_level(HEATER_GPIO, s_ctx.heater_on ? 1 : 0);
         UNLOCK();
     }
 }
@@ -174,6 +190,18 @@ static void control_task(void *arg)
 void brew_control_init(void)
 {
     s_mtx = xSemaphoreCreateMutex();
+
+    // Управляющий выход на SSR. Первым делом — гарантированно в 0 + подтяжка вниз,
+    // чтобы ТЭН был выключен при старте (до внешнего резистора это подстраховка).
+    gpio_config_t heater_io = {
+        .pin_bit_mask = 1ULL << HEATER_GPIO,
+        .mode         = GPIO_MODE_OUTPUT,
+        .pull_up_en   = GPIO_PULLUP_DISABLE,
+        .pull_down_en = GPIO_PULLDOWN_ENABLE,
+        .intr_type    = GPIO_INTR_DISABLE,
+    };
+    gpio_config(&heater_io);
+    gpio_set_level(HEATER_GPIO, 0);
 
     memset(&s_ctx, 0, sizeof(s_ctx));
     s_ctx.state      = BREW_IDLE;
