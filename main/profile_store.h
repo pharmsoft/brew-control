@@ -21,3 +21,9 @@ bool profile_store_load(const char *name, brew_step_t *steps_out, int *count_out
 
 // Удалить профиль по имени. Возвращает false, если не найден.
 bool profile_store_delete(const char *name);
+
+// Однократно за всё время жизни устройства засеять «заводской» профиль в
+// библиотеку. Посев происходит только при самом первом запуске: повторные
+// вызовы, а также запуск после удаления профиля пользователем — игнорируются.
+// Возвращает true, если профиль был засеян этим вызовом.
+bool profile_store_seed(const char *name, const brew_step_t *steps, int count);

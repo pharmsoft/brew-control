@@ -16,6 +16,27 @@
          display:flex;align-items:center;gap:12px}
   header h1{font-size:18px;margin:0;font-weight:600}
   header .badge{font-size:12px;color:var(--muted)}
+  .hamburger{background:transparent;border:none;color:var(--txt);font-size:20px;line-height:1;
+             padding:6px 8px;border-radius:6px;margin:-6px 0}
+  .hamburger:hover{background:#22303d}
+  .drawer-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);opacity:0;pointer-events:none;
+                  transition:opacity .2s ease;z-index:40}
+  .drawer-overlay.open{opacity:1;pointer-events:auto}
+  .drawer{position:fixed;top:0;left:0;bottom:0;width:270px;max-width:80vw;background:var(--panel);
+          border-right:1px solid var(--line);transform:translateX(-100%);
+          transition:transform .25s ease;z-index:41;display:flex;flex-direction:column;
+          padding:6px 0;overflow-y:auto}
+  .drawer.open{transform:translateX(0)}
+  .drawer .drawer-title{padding:16px 18px;font-size:16px;font-weight:600;
+                         border-bottom:1px solid var(--line);margin-bottom:6px}
+  .drawer .nav-item{display:flex;align-items:center;gap:12px;width:100%;text-align:left;
+                     background:transparent;border:none;color:var(--txt);padding:13px 18px;
+                     font-size:15px;font-weight:500;border-radius:0}
+  .drawer .nav-item .ic{font-size:18px;width:22px;text-align:center}
+  .drawer .nav-item:hover{background:#1f2e3c}
+  .drawer .nav-item.active{background:#1f2e3c;color:var(--accent)}
+  .view{display:none}
+  .view.active{display:grid;gap:16px}
   .wrap{max-width:920px;margin:0 auto;padding:16px}
   .grid{display:grid;grid-template-columns:1fr;gap:16px}
   .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
@@ -50,11 +71,25 @@
 </head>
 <body>
 <header>
+  <button class="hamburger" id="menuBtn" type="button" aria-label="Меню">☰</button>
   <h1>🍺 BrewControl</h1>
   <span class="badge" id="badge">прототип · симуляция температуры</span>
 </header>
 
-<div class="wrap grid">
+<div class="drawer-overlay" id="drawerOverlay"></div>
+<nav class="drawer" id="drawer">
+  <div class="drawer-title">🍺 BrewControl</div>
+  <button class="nav-item" id="navBrew" data-view="brew" type="button">
+    <span class="ic">🔥</span> Варка</button>
+  <button class="nav-item" id="navLibrary" data-view="library" type="button">
+    <span class="ic">📖</span> Библиотека профилей</button>
+  <button class="nav-item" id="navSettings" data-view="settings" type="button">
+    <span class="ic">⚙️</span> Настройки</button>
+</nav>
+
+<div class="wrap">
+
+<div class="view" id="view-brew">
 
   <div class="card">
     <div class="stats">
@@ -63,6 +98,7 @@
       <div class="stat"><div class="v small"><span class="dot" id="heaterDot"></span><span id="heater">выкл</span></div><div class="l">ТЭН</div></div>
       <div class="stat"><div class="v small" id="stateTxt">—</div><div class="l">состояние</div></div>
       <div class="stat"><div class="v small" id="stepTxt">—</div><div class="l">шаг</div></div>
+      <div class="stat"><div class="v small" id="holdTxt">—</div><div class="l" id="holdLbl">выдержка</div></div>
       <div class="stat"><div class="v small" id="elapsed">0:00</div><div class="l">время варки</div></div>
     </div>
     <div class="row">
@@ -71,24 +107,15 @@
   </div>
 
   <div class="card">
-    <b>Температурный профиль</b>
+    <b>Температурный профиль</b> <span class="badge" id="brewName"></span>
     <table>
-      <thead><tr><th>#</th><th>Температура, °C</th><th>Выдержка, мин</th><th></th></tr></thead>
-      <tbody id="steps"></tbody>
+      <thead><tr><th>#</th><th>Температура, °C</th><th>Выдержка, мин</th></tr></thead>
+      <tbody id="brewSteps"></tbody>
     </table>
     <div class="row">
-      <button class="ghost" id="addStep">+ шаг</button>
+      <label class="hint">профиль для варки:&nbsp;</label>
+      <select id="brewSelect"><option value="">— выберите профиль —</option></select>
     </div>
-
-    <div class="row">
-      <input type="text" id="profName" placeholder="имя профиля" maxlength="31">
-      <button id="saveProfile">💾 Сохранить</button>
-      <div class="spacer"></div>
-      <select id="savedList"><option value="">— сохранённые —</option></select>
-      <button class="ghost" id="loadProfile">📂 Загрузить</button>
-      <button class="ghost" id="delProfile">🗑</button>
-    </div>
-
     <div class="row">
       <button class="primary" id="start">▶ Старт</button>
       <button class="stop" id="stop">■ Стоп</button>
@@ -102,10 +129,44 @@
         <option value="120">x120</option>
       </select>
     </div>
-    <div class="hint">Датчик DS18B20 ещё не подключён — температура моделируется термо-моделью
-      (нагрев ТЭНом + остывание). Регулятор bang-bang с гистерезисом; логика та же, что будет
-      работать с реальным железом.</div>
+    <div class="hint">Профиль выбирается только для запуска варки и показан здесь без
+      возможности правки. Создавать и редактировать профили — во вкладке
+      «Библиотека профилей».</div>
   </div>
+
+</div>
+
+<div class="view" id="view-library">
+
+  <div class="card">
+    <b>Редактор профилей</b>
+    <div class="row">
+      <label class="hint">профиль:&nbsp;</label>
+      <select id="editSelect"><option value="">— новый профиль —</option></select>
+      <div class="spacer"></div>
+      <button class="ghost" id="renameProfile">✎ Переименовать</button>
+      <button class="ghost" id="delProfile">🗑 Удалить</button>
+    </div>
+    <div class="row">
+      <input type="text" id="editName" placeholder="имя профиля" maxlength="31">
+      <button class="primary" id="saveProfile">💾 Сохранить</button>
+    </div>
+    <table>
+      <thead><tr><th>#</th><th>Температура, °C</th><th>Выдержка, мин</th><th></th></tr></thead>
+      <tbody id="editSteps"></tbody>
+    </table>
+    <div class="row">
+      <button class="ghost" id="addStep">+ шаг</button>
+    </div>
+    <div class="hint" id="editMsg"></div>
+    <div class="hint">Изменения сохраняются в память контроллера кнопкой «Сохранить».
+      «Переименовать» и «Удалить» действуют на выбранный в списке профиль. Для запуска
+      варки профиль выбирается на вкладке «Варка».</div>
+  </div>
+
+</div>
+
+<div class="view" id="view-settings">
 
   <div class="card">
     <b>Сеть и система</b>
@@ -194,9 +255,16 @@
 
 </div>
 
+</div>
+
 <script>
 const $ = id => document.getElementById(id);
-let profile = [];          // [{temp,dur(сек)}]
+let brewProfile = [];      // активный профиль варки (read-only), синхронизируется с прошивкой
+let brewSig = '';          // подпись brewProfile для детекта изменений от прошивки
+let brewStatus = null;     // последний ответ /api/status (для отрисовки графика)
+let editSteps = [];        // рабочий буфер редактора библиотеки [{temp,dur(сек)}]
+let editLoadedName = '';   // имя загруженного в редактор профиля ('' = новый)
+let savedNames = [];       // список сохранённых профилей
 let history = [];          // [{t(сек), temp}]
 let lastState = 'idle';
 
@@ -213,10 +281,87 @@ async function postJSON(url, obj){
   }catch(e){ return false; }   // сеть отвалилась — не роняем обработчик молча
 }
 
-// ---------- Редактор профиля ----------
-function renderSteps(){
-  const tb = $('steps'); tb.innerHTML='';
-  profile.forEach((s,i)=>{
+function flash(btn, txt, ms=1200){
+  const old=btn.textContent; btn.textContent=txt;
+  setTimeout(()=>btn.textContent=old, ms);
+}
+
+// Загрузить шаги сохранённого профиля с платы. Возвращает массив или null.
+async function loadProfileSteps(name){
+  try{
+    const r = await fetch('/api/profiles/load',{method:'POST',
+              headers:{'Content-Type':'application/json'},body:JSON.stringify({name})});
+    if(!r.ok) return null;
+    const j = await r.json();
+    return (j.steps||[]).map(s=>({temp:s.temp,dur:s.dur}));
+  }catch(e){ return null; }
+}
+
+// ---- Список профилей (общий для обеих вкладок) ----
+function fillSelect(sel, placeholder, keep){
+  sel.innerHTML = '<option value="">'+placeholder+'</option>';
+  savedNames.forEach(n=>{
+    const o=document.createElement('option'); o.value=n; o.textContent=n; sel.appendChild(o);
+  });
+  if(savedNames.includes(keep)) sel.value=keep;
+}
+async function refreshProfiles(){
+  try{
+    const r = await fetch('/api/profiles'); const j = await r.json();
+    savedNames = j.profiles||[];
+  }catch(e){ savedNames=[]; }
+  fillSelect($('brewSelect'), '— выберите профиль —', $('brewSelect').value);
+  fillSelect($('editSelect'), '— новый профиль —', $('editSelect').value);
+}
+
+// ---------- Варка: выбор профиля (read-only) ----------
+function renderBrewSteps(){
+  const tb = $('brewSteps'); tb.innerHTML='';
+  if(!brewProfile.length){
+    tb.innerHTML='<tr><td colspan="3" class="hint" style="text-align:center;padding:14px">'
+      +'Профиль не выбран — выберите его в списке ниже.</td></tr>';
+    return;
+  }
+  brewProfile.forEach((s,i)=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${i+1}</td><td>${s.temp}</td><td>${Math.round(s.dur/60)}</td>`;
+    tb.appendChild(tr);
+  });
+}
+
+$('brewSelect').onchange = async ()=>{
+  const name = $('brewSelect').value;
+  if(!name){ return; }
+  const steps = await loadProfileSteps(name);
+  if(!steps || !steps.length){ flash($('brewName'),'ошибка'); return; }
+  brewProfile = steps;
+  brewSig = '';                              // форсируем перерисовку в tick
+  await postJSON('/api/profile',{steps:steps.map(s=>({temp:s.temp,dur:Math.round(s.dur)}))});
+  localStorage.setItem('bcBrewName', name);
+  $('brewName').textContent = name;
+  history=[];
+  renderBrewSteps(); drawChart();
+};
+
+$('start').onclick = async ()=>{
+  if(!brewProfile.length){ flash($('start'),'Выберите профиль'); return; }
+  const timeScale = parseFloat($('scale').value);
+  history=[];               // новый прогон — чистим график
+  await postJSON('/api/profile',{steps:brewProfile.map(s=>({temp:s.temp,dur:Math.round(s.dur)}))});
+  await postJSON('/api/control',{action:'start',timeScale});
+};
+$('stop').onclick = ()=> postJSON('/api/control',{action:'stop'});
+$('scale').onchange = ()=> postJSON('/api/control',{timeScale:parseFloat($('scale').value)});
+
+// ---------- Библиотека: редактор профилей ----------
+function renderEditor(){
+  const tb = $('editSteps'); tb.innerHTML='';
+  if(!editSteps.length){
+    tb.innerHTML='<tr><td colspan="4" class="hint" style="text-align:center;padding:14px">'
+      +'Нет шагов — добавьте кнопкой «+ шаг».</td></tr>';
+    return;
+  }
+  editSteps.forEach((s,i)=>{
     const tr = document.createElement('tr');
     tr.innerHTML = `<td>${i+1}</td>
       <td><input type="number" step="0.5" value="${s.temp}" data-i="${i}" data-k="temp"></td>
@@ -227,76 +372,58 @@ function renderSteps(){
   tb.querySelectorAll('input').forEach(inp=>{
     inp.onchange = e=>{
       const i=+e.target.dataset.i, k=e.target.dataset.k, v=parseFloat(e.target.value)||0;
-      profile[i][k] = (k==='dur') ? Math.max(0,v)*60 : v;
-      drawChart();
+      editSteps[i][k] = (k==='dur') ? Math.max(0,v)*60 : v;
     };
   });
   tb.querySelectorAll('[data-del]').forEach(b=>{
-    b.onclick = e=>{ profile.splice(+e.target.dataset.del,1); renderSteps(); drawChart(); };
+    b.onclick = e=>{ editSteps.splice(+e.target.dataset.del,1); renderEditor(); };
   });
 }
-function currentSteps(){ return profile.map(s=>({temp:s.temp,dur:Math.round(s.dur)})); }
+function editStepsPayload(){ return editSteps.map(s=>({temp:s.temp,dur:Math.round(s.dur)})); }
 
-$('addStep').onclick = ()=>{ profile.push({temp:65,dur:600}); renderSteps(); drawChart(); };
+$('addStep').onclick = ()=>{ editSteps.push({temp:65,dur:600}); renderEditor(); };
 
-// ---- Библиотека профилей (сохранение/загрузка в NVS платы) ----
-async function refreshProfiles(){
-  try{
-    const r = await fetch('/api/profiles'); const j = await r.json();
-    const sel = $('savedList'), cur = sel.value;
-    sel.innerHTML = '<option value="">— сохранённые —</option>';
-    (j.profiles||[]).forEach(n=>{
-      const o=document.createElement('option'); o.value=n; o.textContent=n; sel.appendChild(o);
-    });
-    if([...sel.options].some(o=>o.value===cur)) sel.value=cur;
-  }catch(e){}
-}
-
-function flash(btn, txt, ms=1200){
-  const old=btn.textContent; btn.textContent=txt;
-  setTimeout(()=>btn.textContent=old, ms);
-}
-
-$('saveProfile').onclick = async ()=>{
-  const name = $('profName').value.trim();
-  if(!name){ $('profName').focus(); flash($('saveProfile'),'Введите имя'); return; }
-  if(!profile.length){ flash($('saveProfile'),'Пустой профиль'); return; }
-  const ok = await postJSON('/api/profiles/save',{name, steps:currentSteps()});
-  flash($('saveProfile'), ok?'✓ Сохранено':'Ошибка');
-  if(ok){ await refreshProfiles(); $('savedList').value=name; }
+$('editSelect').onchange = async ()=>{
+  const name = $('editSelect').value;
+  $('editMsg').textContent='';
+  if(!name){ editLoadedName=''; editSteps=[]; $('editName').value=''; renderEditor(); return; }
+  const steps = await loadProfileSteps(name);
+  if(!steps){ $('editMsg').textContent='Ошибка загрузки'; return; }
+  editLoadedName=name; editSteps=steps; $('editName').value=name; renderEditor();
 };
 
-$('loadProfile').onclick = async ()=>{
-  const name = $('savedList').value;
-  if(!name){ flash($('loadProfile'),'Выберите'); return; }
-  const r = await fetch('/api/profiles/load',{method:'POST',
-            headers:{'Content-Type':'application/json'},body:JSON.stringify({name})});
-  if(!r.ok){ flash($('loadProfile'),'Ошибка'); return; }
-  const j = await r.json();
-  profile = (j.steps||[]).map(s=>({temp:s.temp,dur:s.dur}));
-  $('profName').value = j.name || name;
-  history=[];
-  renderSteps(); drawChart();
-  flash($('loadProfile'),'✓ Загружено');
+$('saveProfile').onclick = async ()=>{
+  const name = $('editName').value.trim();
+  if(!name){ $('editName').focus(); flash($('saveProfile'),'Введите имя'); return; }
+  if(!editSteps.length){ flash($('saveProfile'),'Нет шагов'); return; }
+  const ok = await postJSON('/api/profiles/save',{name, steps:editStepsPayload()});
+  flash($('saveProfile'), ok?'✓ Сохранено':'Ошибка');
+  if(ok){ editLoadedName=name; await refreshProfiles(); $('editSelect').value=name; }
+};
+
+$('renameProfile').onclick = async ()=>{
+  if(!editLoadedName){ flash($('renameProfile'),'Сначала выберите'); return; }
+  const name = $('editName').value.trim();
+  if(!name){ $('editName').focus(); flash($('renameProfile'),'Введите имя'); return; }
+  if(name===editLoadedName){ flash($('renameProfile'),'Имя не изменилось'); return; }
+  if(savedNames.includes(name) && !confirm('Профиль «'+name+'» уже есть. Перезаписать?')) return;
+  // Переименование = сохранить под новым именем + удалить старое (отдельного API нет).
+  const ok = await postJSON('/api/profiles/save',{name, steps:editStepsPayload()});
+  if(ok) await postJSON('/api/profiles/delete',{name:editLoadedName});
+  flash($('renameProfile'), ok?'✓ Переименовано':'Ошибка');
+  if(ok){ editLoadedName=name; await refreshProfiles(); $('editSelect').value=name; }
 };
 
 $('delProfile').onclick = async ()=>{
-  const name = $('savedList').value;
-  if(!name){ flash($('delProfile'),'?'); return; }
-  if(!confirm('Удалить профиль «'+name+'»?')) return;
-  const ok = await postJSON('/api/profiles/delete',{name});
-  if(ok) await refreshProfiles();
+  if(!editLoadedName){ flash($('delProfile'),'Сначала выберите'); return; }
+  if(!confirm('Удалить профиль «'+editLoadedName+'»?')) return;
+  const ok = await postJSON('/api/profiles/delete',{name:editLoadedName});
+  if(ok){
+    editLoadedName=''; editSteps=[]; $('editName').value='';
+    await refreshProfiles(); $('editSelect').value=''; renderEditor();
+  }
+  flash($('delProfile'), ok?'✓ Удалено':'Ошибка');
 };
-
-$('start').onclick = async ()=>{
-  const timeScale = parseFloat($('scale').value);
-  history=[];               // новый прогон — чистим график
-  // применяем текущий профиль из редактора и стартуем
-  await postJSON('/api/profile',{steps:currentSteps()});
-  await postJSON('/api/control',{action:'start',timeScale});
-};
-$('stop').onclick = ()=> postJSON('/api/control',{action:'stop'});
-$('scale').onchange = ()=> postJSON('/api/control',{timeScale:parseFloat($('scale').value)});
 
 // ---------- График ----------
 function fmtTime(sec){
@@ -306,9 +433,13 @@ function fmtTime(sec){
 }
 
 function drawChart(curElapsed=0, curTemp=null){
-  const cv=$('chart'), ctx=cv.getContext('2d');
+  const cv=$('chart');
+  // Вкладка «Варка» может быть скрыта (display:none) — тогда рисовать нечего.
+  const W=cv.clientWidth, H=cv.clientHeight;
+  if(!W || !H) return;
+  const ctx=cv.getContext('2d');
   // подгоняем разрешение под devicePixelRatio
-  const dpr=window.devicePixelRatio||1, W=cv.clientWidth, H=cv.clientHeight;
+  const dpr=window.devicePixelRatio||1;
   if(cv.width!==W*dpr||cv.height!==H*dpr){cv.width=W*dpr;cv.height=H*dpr;}
   ctx.setTransform(dpr,0,0,dpr,0,0);
   ctx.clearRect(0,0,W,H);
@@ -316,11 +447,36 @@ function drawChart(curElapsed=0, curTemp=null){
   const padL=44,padR=12,padT=12,padB=26;
   const plotW=W-padL-padR, plotH=H-padT-padB;
 
+  // Идёт ли (или шла) варка: если да — план строим по реальному времени.
+  const live = history.length > 0;
+  const running = !!(brewStatus && brewStatus.state==='running'
+                     && brewStatus.stepCount && brewStatus.step < brewStatus.stepCount);
+
+  // Проекция оставшегося плана от «сейчас»: остаток текущей выдержки + будущие
+  // шаги встык. Разогрев будущих шагов не прогнозируем (мгновенный подъём).
+  function projectFuture(){
+    const step = brewStatus.step;
+    const dur  = (brewProfile[step]||{}).dur || 0;
+    const holdLeft = Math.max(0, dur - (brewStatus.stepHold||0));
+    const pts = [];
+    let x = curElapsed;
+    pts.push([x, (brewProfile[step]||{}).temp]);
+    x += holdLeft; pts.push([x, (brewProfile[step]||{}).temp]);
+    for(let i=step+1;i<brewProfile.length;i++){
+      pts.push([x, brewProfile[i].temp]);        // подъём уставки
+      x += brewProfile[i].dur;
+      pts.push([x, brewProfile[i].temp]);        // выдержка
+    }
+    return {pts, end:x};
+  }
+  const future = running ? projectFuture() : null;
+
   // диапазоны
-  const plannedTotal = profile.reduce((a,s)=>a+s.dur,0);       // сек (только выдержки)
+  const plannedTotal = brewProfile.reduce((a,s)=>a+s.dur,0);   // сек (только выдержки)
   const maxElapsed   = history.length?history[history.length-1].t:0;
-  let xMaxSec = Math.max(plannedTotal, maxElapsed, 60)*1.05;
-  const temps = profile.map(s=>s.temp).concat([curTemp||20]);
+  const projEnd      = future ? future.end : 0;
+  let xMaxSec = Math.max(plannedTotal, maxElapsed, projEnd, 60)*1.05;
+  const temps = brewProfile.map(s=>s.temp).concat([curTemp||20]);
   let yMax = Math.max(85, Math.ceil((Math.max(...temps)+8)/5)*5);
   let yMin = 15;
 
@@ -341,20 +497,38 @@ function drawChart(curElapsed=0, curTemp=null){
     ctx.fillText(Math.round(sec/60)+'м',X(sec),padT+plotH+6);
   }
 
-  // плановый профиль (ступени уставки)
-  if(profile.length){
-    ctx.strokeStyle='#4aa3ff';ctx.lineWidth=2;ctx.setLineDash([6,4]);
-    ctx.beginPath();
-    let x=0;
-    profile.forEach((s,i)=>{
-      if(i===0) ctx.moveTo(X(0),Y(s.temp)); else ctx.lineTo(X(x),Y(s.temp));
-      ctx.lineTo(X(x+s.dur),Y(s.temp));
-      x+=s.dur;
+  if(!live){
+    // ---- Превью рецепта (варка не запущена): план встык от t=0 ----
+    if(brewProfile.length){
+      ctx.strokeStyle='#4aa3ff';ctx.lineWidth=2;ctx.setLineDash([6,4]);
+      ctx.beginPath();
+      let x=0;
+      brewProfile.forEach((s,i)=>{
+        if(i===0) ctx.moveTo(X(0),Y(s.temp)); else ctx.lineTo(X(x),Y(s.temp));
+        ctx.lineTo(X(x+s.dur),Y(s.temp));
+        x+=s.dur;
+      });
+      ctx.stroke();ctx.setLineDash([]);
+      ctx.fillStyle='#4aa3ff';ctx.textAlign='left';ctx.textBaseline='bottom';
+      x=0;brewProfile.forEach(s=>{ctx.fillText(s.temp+'°',X(x)+4,Y(s.temp)-2);x+=s.dur;});
+    }
+  } else {
+    // ---- Идёт/завершена варка ----
+    // Прогноз оставшегося плана (бледный пунктир) — от «сейчас» вперёд.
+    if(future && future.pts.length){
+      ctx.strokeStyle='rgba(74,163,255,.45)';ctx.lineWidth=1.6;ctx.setLineDash([4,4]);
+      ctx.beginPath();
+      future.pts.forEach((p,i)=> i?ctx.lineTo(X(p[0]),Y(p[1])):ctx.moveTo(X(p[0]),Y(p[1])));
+      ctx.stroke();ctx.setLineDash([]);
+    }
+    // Фактическая уставка: строится по записанным target — ступень поднимается
+    // в реальный момент перехода шага (с учётом разогрева).
+    ctx.strokeStyle='#4aa3ff';ctx.lineWidth=2;ctx.beginPath();
+    history.forEach((p,i)=>{
+      const y=Y(p.target!==undefined?p.target:p.temp);
+      i?ctx.lineTo(X(p.t),y):ctx.moveTo(X(p.t),y);
     });
-    ctx.stroke();ctx.setLineDash([]);
-    // подписи температур
-    ctx.fillStyle='#4aa3ff';ctx.textAlign='left';ctx.textBaseline='bottom';
-    x=0;profile.forEach(s=>{ctx.fillText(s.temp+'°',X(x)+4,Y(s.temp)-2);x+=s.dur;});
+    ctx.stroke();
   }
 
   // фактическая температура
@@ -372,18 +546,29 @@ function drawChart(curElapsed=0, curTemp=null){
 
   // легенда
   ctx.textAlign='left';ctx.textBaseline='middle';ctx.font='11px system-ui';
-  ctx.fillStyle='#4aa3ff';ctx.fillText('— уставка (план)',padL+8,padT+10);
-  ctx.fillStyle='#ff8c42';ctx.fillText('— факт',padL+128,padT+10);
+  ctx.fillStyle='#4aa3ff';
+  ctx.fillText(live?'— уставка (факт)':'— уставка (план)',padL+8,padT+10);
+  ctx.fillStyle='#ff8c42';ctx.fillText('— факт t°',padL+130,padT+10);
+  if(live && future){
+    ctx.fillStyle='rgba(74,163,255,.6)';ctx.fillText('· · прогноз',padL+210,padT+10);
+  }
 }
 
 // ---------- Опрос статуса ----------
 async function tick(){
   const st = await getStatus();
   if(st){
-    // синхронизируем профиль из прошивки при первой загрузке / после stop
-    if(profile.length===0 && st.profile) {
-      profile = st.profile.map(s=>({temp:s.temp,dur:s.dur}));
-      renderSteps();
+    brewStatus = st;   // нужен drawChart для проекции оставшегося плана
+    // Активный профиль варки — всегда отражаем то, что реально загружено в
+    // прошивку (в т.ч. если варку запустили удалённо по MQTT). Перерисовываем
+    // read-only таблицу только когда набор шагов изменился.
+    if(st.profile){
+      const sig = JSON.stringify(st.profile);
+      if(sig !== brewSig){
+        brewSig = sig;
+        brewProfile = st.profile.map(s=>({temp:s.temp,dur:s.dur}));
+        renderBrewSteps();
+      }
     }
     $('temp').textContent    = st.temp.toFixed(1);
     $('target').textContent  = st.target.toFixed(1);
@@ -394,6 +579,22 @@ async function tick(){
     const sMap={idle:'ожидание',running:'варка идёт',done:'завершено'};
     $('stateTxt').textContent=sMap[st.state]||st.state;
     $('stateTxt').className='v small state-'+st.state;
+
+    // Фаза текущего шага + обратный отсчёт выдержки. stepHold прошивка увеличивает
+    // только ПОСЛЕ выхода на уставку: 0 при работающей варке = идёт разогрев.
+    if(st.state==='running' && st.stepCount && st.step<st.stepCount){
+      const dur = (brewProfile[st.step]||{}).dur || 0;
+      if(st.stepHold>0){
+        $('holdLbl').textContent='выдержка';
+        $('holdTxt').textContent=fmtTime(st.stepHold)+' / '+fmtTime(dur);
+      }else{
+        $('holdLbl').textContent='фаза шага';
+        $('holdTxt').textContent='разогрев';
+      }
+    }else{
+      $('holdLbl').textContent='выдержка';
+      $('holdTxt').textContent='—';
+    }
 
     // Режим датчика: с реальным DS18B20 ускорение времени принудительно ×1
     if(st.sensorOk!==undefined){
@@ -444,11 +645,12 @@ async function tick(){
       if(a!==$('mqttEnabled')) $('mqttEnabled').checked=!!st.mqtt.enabled;
     }
 
-    // накопление истории во время варки
+    // накопление истории во время варки: пишем и факт, и уставку — уставка
+    // меняется в реальный момент перехода шага, поэтому даёт правдивую линию плана.
     if(st.state==='running'){
       const last=history[history.length-1];
       if(!last || st.totalElapsed>=last.t)
-        history.push({t:st.totalElapsed,temp:st.temp});
+        history.push({t:st.totalElapsed,temp:st.temp,target:st.target});
     }
     drawChart(st.totalElapsed, st.temp);
     lastState=st.state;
@@ -535,12 +737,39 @@ $('doOta').onclick = ()=>{
   xhr.send(f);
 };
 
-renderSteps();
+// ---------- Меню / drawer ----------
+const menuBtn=$('menuBtn'), drawer=$('drawer'), drawerOverlay=$('drawerOverlay');
+function openDrawer(){ drawer.classList.add('open'); drawerOverlay.classList.add('open'); }
+function closeDrawer(){ drawer.classList.remove('open'); drawerOverlay.classList.remove('open'); }
+menuBtn.onclick = openDrawer;
+drawerOverlay.onclick = closeDrawer;
+
+const VIEWS = ['brew','library','settings'];
+function selectView(view){
+  VIEWS.forEach(v=>$('view-'+v).classList.toggle('active', v===view));
+  $('navBrew').classList.toggle('active', view==='brew');
+  $('navLibrary').classList.toggle('active', view==='library');
+  $('navSettings').classList.toggle('active', view==='settings');
+  localStorage.setItem('bcView', view);
+  if(view==='brew') drawChart();     // канвас получает размеры только когда виден
+  closeDrawer();
+}
+$('navBrew').onclick = ()=>selectView('brew');
+$('navLibrary').onclick = ()=>selectView('library');
+$('navSettings').onclick = ()=>selectView('settings');
+const startView = localStorage.getItem('bcView');
+selectView(VIEWS.includes(startView) ? startView : 'brew');
+
+renderBrewSteps();
+renderEditor();
+refreshProfiles().then(()=>{
+  const bn = localStorage.getItem('bcBrewName')||'';
+  if(bn && savedNames.includes(bn)){ $('brewSelect').value=bn; $('brewName').textContent=bn; }
+});
 drawChart();
-refreshProfiles();
 tick();
 setInterval(tick,1000);
-window.addEventListener('resize',()=>drawChart());
+window.addEventListener('resize',()=>{ if($('view-brew').classList.contains('active')) drawChart(); });
 </script>
 </body>
 </html>

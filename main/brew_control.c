@@ -58,15 +58,6 @@ static SemaphoreHandle_t s_mtx;
 #define LOCK()   xSemaphoreTake(s_mtx, portMAX_DELAY)
 #define UNLOCK() xSemaphoreGive(s_mtx)
 
-// ---- Профиль по умолчанию (пример пользователя) -----------------------------
-
-static const brew_step_t k_default_profile[] = {
-    { 50.0f, 10 * 60 },
-    { 62.0f, 30 * 60 },
-    { 72.0f, 30 * 60 },
-    { 78.0f, 10 * 60 },
-};
-
 // -----------------------------------------------------------------------------
 
 static void reset_run_state(void)
@@ -212,8 +203,9 @@ void brew_control_init(void)
     s_ctx.sensor_ok  = false;
     s_ctx.time_scale = 20.0f;   // по умолчанию ускорение x20 для отладки прототипа
 
-    s_ctx.step_count = sizeof(k_default_profile) / sizeof(k_default_profile[0]);
-    memcpy(s_ctx.profile, k_default_profile, sizeof(k_default_profile));
+    // Профиль при старте не загружаем — пользователь выбирает его из
+    // библиотеки в UI (memset уже обнулил step_count).
+    s_ctx.step_count = 0;
     reset_run_state();
 
     xTaskCreate(control_task, "brew_ctrl", 4096, NULL, 5, NULL);

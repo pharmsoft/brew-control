@@ -2,6 +2,7 @@
 
 #include <string.h>
 #include <stdlib.h>
+#include <stdint.h>
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
@@ -12,6 +13,7 @@ static const char *TAG = "profstore";
 
 #define NVS_NS   "brewprof"
 #define NVS_KEY  "lib"        // единый JSON-блоб со всеми профилями
+#define NVS_SEEDED "seeded"   // флаг: заводские профили уже засеяны
 
 // Библиотека профилей целиком держится в памяти как cJSON-массив объектов:
 //   [ { "name": "...", "steps": [ {"temp":..,"dur":..}, ... ] }, ... ]
@@ -163,6 +165,29 @@ bool profile_store_load(const char *name, brew_step_t *steps_out, int *count_out
         }
     }
     UNLOCK();
+    return ok;
+}
+
+bool profile_store_seed(const char *name, const brew_step_t *steps, int count)
+{
+    // Флаг посева храним отдельно от блоба, чтобы удаление пользователем
+    // засеянного профиля не приводило к повторному посеву при перезагрузке.
+    nvs_handle_t h;
+    if (nvs_open(NVS_NS, NVS_READONLY, &h) == ESP_OK) {
+        uint8_t seeded = 0;
+        esp_err_t err = nvs_get_u8(h, NVS_SEEDED, &seeded);
+        nvs_close(h);
+        if (err == ESP_OK && seeded) return false;   // уже засевали
+    }
+
+    bool ok = profile_store_save(name, steps, count);
+
+    if (nvs_open(NVS_NS, NVS_READWRITE, &h) == ESP_OK) {
+        nvs_set_u8(h, NVS_SEEDED, 1);
+        nvs_commit(h);
+        nvs_close(h);
+    }
+    if (ok) ESP_LOGI(TAG, "Засеян заводской профиль: \"%s\"", name);
     return ok;
 }
 

@@ -13,6 +13,15 @@
 
 static const char *TAG = "app";
 
+// Заводской профиль «из коробки» — единожды засевается в библиотеку профилей
+// при первом запуске и дальше живёт как обычный именованный профиль.
+static const brew_step_t k_seed_profile[] = {
+    { 50.0f, 10 * 60 },
+    { 62.0f, 30 * 60 },
+    { 72.0f, 30 * 60 },
+    { 78.0f, 10 * 60 },
+};
+
 static const char *reset_reason_str(esp_reset_reason_t r)
 {
     switch (r) {
@@ -38,6 +47,8 @@ void app_main(void)
     brew_control_init();   // движок профилей + симулятор температуры
     wifi_init();           // AP+STA: точка доступа + подключение к роутеру (+ init NVS)
     profile_store_init();  // библиотека именованных профилей в NVS
+    profile_store_seed("Пивасик", k_seed_profile,
+                       sizeof(k_seed_profile) / sizeof(k_seed_profile[0]));
     web_server_start();    // веб-интерфейс + REST API + OTA
     ota_update_init();     // удалённые обновления по воздуху с GitHub
     telemetry_init();      // телеметрия и команды через MQTT

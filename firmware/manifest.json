@@ -1,5 +1,5 @@
 {
-  "version": "0.7.0",
-  "url": "https://github.com/pharmsoft/brew-control/releases/download/v0.7.0/brewcontrol.bin",
-  "notes": "Телеметрия и удалённое управление по MQTT"
+  "version": "0.8.0",
+  "url": "https://github.com/pharmsoft/brew-control/releases/download/v0.8.0/brewcontrol.bin",
+  "notes": "Новый интерфейс: боковое меню, разделение «Варка» / «Библиотека профилей», редактор профилей, честный график уставки по реальному времени"
 }
