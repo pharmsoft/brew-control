@@ -5,6 +5,6 @@ cmake_minimum_required(VERSION 3.22)
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 
 # Версия прошивки — попадает в esp_app_get_description()->version и в диагностику.
-set(PROJECT_VER "0.8.0")
+set(PROJECT_VER "0.9.0")
 
 project(brewcontrol)
